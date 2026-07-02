@@ -441,6 +441,7 @@ async function handleLogin() {
 
     // 4. Store auth in sessionStorage
     sessionStorage.setItem('bounce_auth', JSON.stringify(authProfile));
+    sessionStorage.setItem('bounce_login_ts', Date.now().toString()); // 24h session timer
 
     // 5. Create session in user_sessions table (non-blocking)
     const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8h
