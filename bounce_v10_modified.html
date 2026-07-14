@@ -1697,6 +1697,192 @@ body,header,.global-slicer,.chart-card,.panel.active,.tabs,
 [data-theme="light"] .risk-pill.active:hover{color:#ffffff;text-shadow:0 1px 2px rgba(120,60,0,.35)}
 .risk-pill:active{transform:scale(.96)}
 
+/* ═══════════════════════════════════════════════════════════════════════
+   ✦ REJECTION REASON BREAKDOWN — bulb trigger + modal (standalone feature)
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Bulb trigger — bordered rounded-rect chip, sits outside the funnel bar so its tooltip is never clipped ── */
+.rej-bulb-btn{
+  position:relative;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;padding:5px;
+  border-radius:11px;cursor:pointer;
+  border:1.5px solid rgba(245,158,11,.4);
+  background:var(--bg3);
+  box-shadow:0 2px 8px rgba(0,0,0,.15), inset 0 1px 0 var(--edge);
+  animation:rejBulbPulse 2.6s ease-in-out infinite;
+  transition:transform .2s cubic-bezier(.34,1.45,.64,1), border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+[data-theme="light"] .rej-bulb-btn{
+  background:#ffffff;border-color:rgba(245,158,11,.45);
+  box-shadow:0 2px 10px rgba(23,26,32,.10), inset 0 1px 0 #fff;
+}
+.rej-bulb-btn svg{width:100%;height:100%;position:relative;z-index:1}
+.rej-bulb-btn:hover{
+  transform:translateY(-2px) scale(1.05);
+  border-color:rgba(245,158,11,.85);
+  box-shadow:0 8px 22px rgba(245,158,11,.35), inset 0 1px 0 var(--edge);
+}
+[data-theme="light"] .rej-bulb-btn:hover{box-shadow:0 8px 20px rgba(245,158,11,.3), inset 0 1px 0 #fff}
+.rej-bulb-btn:active{transform:translateY(0) scale(.97)}
+@keyframes rejBulbPulse{
+  0%,100%{box-shadow:0 2px 8px rgba(0,0,0,.15), inset 0 1px 0 var(--edge), 0 0 0 0 rgba(245,158,11,.35);}
+  50%{box-shadow:0 2px 8px rgba(0,0,0,.15), inset 0 1px 0 var(--edge), 0 0 0 5px rgba(245,158,11,0);}
+}
+.rej-bulb-ring{
+  position:absolute;inset:-4px;border-radius:13px;
+  border:1.5px solid rgba(245,158,11,.45);
+  animation:rejRingExpand 2.6s ease-out infinite;
+  pointer-events:none;
+}
+@keyframes rejRingExpand{
+  0%{transform:scale(.92);opacity:.9}
+  70%{transform:scale(1.18);opacity:0}
+  100%{opacity:0}
+}
+.rej-bulb-tip{
+  position:absolute;bottom:calc(100% + 9px);right:-4px;left:auto;transform:translateY(4px);
+  background:#181310;color:#f7f2e9;font-size:.64rem;font-weight:600;letter-spacing:.01em;
+  padding:5px 9px;border-radius:7px;white-space:nowrap;
+  box-shadow:0 8px 22px rgba(0,0,0,.4);
+  opacity:0;pointer-events:none;
+  transition:opacity .18s ease, transform .18s ease;
+  z-index:50;
+}
+.rej-bulb-tip::after{
+  content:'';position:absolute;top:100%;right:12px;
+  border:5px solid transparent;border-top-color:#181310;
+}
+.rej-bulb-btn:hover .rej-bulb-tip{opacity:1;transform:translateY(0)}
+[data-theme="light"] .rej-bulb-tip{background:#171a20;color:#fff}
+[data-theme="light"] .rej-bulb-tip::after{border-top-color:#171a20}
+
+/* ── Modal overlay + card ── */
+.rej-overlay{
+  position:fixed;inset:0;z-index:9000;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(6,5,3,.62);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;
+  transition:opacity .25s ease;
+  padding:24px;
+}
+.rej-overlay.open{opacity:1;pointer-events:auto}
+[data-theme="light"] .rej-overlay{background:rgba(30,26,18,.5)}
+
+.rej-modal{
+  position:relative;width:100%;max-width:900px;max-height:92vh;overflow-y:auto;
+  background:linear-gradient(180deg,var(--hi),transparent 45%),var(--bg2);
+  border:1px solid var(--border);border-radius:20px;
+  box-shadow:0 40px 100px rgba(0,0,0,.55), 0 0 60px rgba(245,158,11,.08), inset 0 1px 0 var(--edge);
+  padding:22px 26px 20px;
+  transform:scale(.94) translateY(14px);
+  transition:transform .3s cubic-bezier(.22,1,.36,1);
+}
+.rej-overlay.open .rej-modal{transform:scale(1) translateY(0)}
+.rej-modal::before{
+  content:'';position:absolute;top:0;left:8%;right:8%;height:2px;border-radius:99px;
+  background:linear-gradient(90deg,transparent,#F59E0B,#f97316,transparent);
+  filter:drop-shadow(0 0 8px rgba(245,158,11,.6));
+}
+[data-theme="light"] .rej-modal::before{filter:none;opacity:.85}
+
+.rej-modal-close{
+  position:absolute;top:14px;right:14px;
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--border);
+  background:var(--bg3);color:var(--text2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s ease;
+}
+.rej-modal-close svg{width:13px;height:13px}
+.rej-modal-close:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#ef4444;transform:rotate(90deg)}
+
+.rej-modal-head{margin-bottom:12px;padding-right:32px}
+.rej-modal-title{
+  font-family:var(--font-display,inherit);font-size:1.05rem;font-weight:800;letter-spacing:-.01em;
+  color:var(--text);margin-bottom:6px;
+}
+.rej-modal-note{
+  font-size:.72rem;color:var(--text2);
+  background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);
+  border-radius:9px;padding:6px 11px;line-height:1.4;
+}
+
+.rej-pills{display:flex;gap:5px;flex-wrap:nowrap;margin-bottom:12px}
+.rej-pill{
+  font-family:inherit;font-size:.68rem;font-weight:700;letter-spacing:.01em;white-space:nowrap;
+  padding:6px 10px;border-radius:99px;cursor:pointer;flex:1 1 0;
+  border:1px solid var(--border);background:var(--bg3);color:var(--text2);
+  transition:all .2s cubic-bezier(.4,0,.2,1);
+}
+[data-theme="dark"] .rej-pill:not(.active):hover{background:rgba(245,158,11,.10);border-color:rgba(245,158,11,.35);color:var(--text)}
+[data-theme="light"] .rej-pill:not(.active):hover{background:#fff;border-color:rgba(245,158,11,.45);color:#171a20;box-shadow:0 4px 12px rgba(23,26,32,.08)}
+.rej-pill.active,.rej-pill.active:hover{
+  background:var(--amber-grad,linear-gradient(120deg,#F59E0B,#f97316));
+  border-color:transparent;color:#1c1204;
+  box-shadow:0 4px 14px rgba(245,158,11,.4), inset 0 1px 0 rgba(255,255,255,.4);
+}
+[data-theme="light"] .rej-pill.active,[data-theme="light"] .rej-pill.active:hover{color:#fff;text-shadow:0 1px 2px rgba(120,60,0,.35)}
+.rej-pill:active{transform:scale(.95)}
+
+.rej-count-box{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:linear-gradient(120deg,rgba(245,158,11,.10),rgba(249,115,22,.04));
+  border:1px solid rgba(245,158,11,.22);border-radius:11px;
+  padding:8px 14px;margin-bottom:14px;
+}
+.rej-count-label{font-size:.64rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text3)}
+.rej-count-val{font-family:var(--font-display,inherit);font-size:1.15rem;font-weight:800;color:var(--orange,#f97316)}
+.rej-count-period{font-size:.68rem;color:var(--text2);margin-left:auto}
+
+.rej-bars{
+  display:grid;grid-template-columns:1fr 1fr;column-gap:22px;row-gap:8px;
+}
+@keyframes rejBarIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.rej-bar-row{animation:rejBarIn .35s cubic-bezier(.22,1,.36,1) both}
+.rej-bar-label{
+  font-size:.68rem;color:var(--text2);margin-bottom:3px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.rej-bar-track{
+  position:relative;height:22px;border-radius:7px;
+  background:var(--bg3);box-shadow:inset 0 1px 3px rgba(0,0,0,.2);
+  overflow:hidden;cursor:default;
+}
+[data-theme="light"] .rej-bar-track{box-shadow:inset 0 1px 3px rgba(23,26,32,.08)}
+.rej-bar-fill{
+  position:relative;height:100%;border-radius:7px;min-width:6px;
+  background:linear-gradient(90deg,#f97316,#F59E0B);
+  box-shadow:0 0 8px rgba(245,158,11,.3);
+  transition:width .5s cubic-bezier(.22,1,.36,1);
+}
+.rej-bar-valwrap{
+  position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  font-family:var(--font-mono,monospace);font-size:.72rem;font-weight:800;
+  height:16px;line-height:16px;overflow:hidden;
+}
+.rej-bar-pct,.rej-bar-count{
+  display:block;height:16px;line-height:16px;
+  transition:transform .2s cubic-bezier(.4,0,.2,1), opacity .2s ease;
+}
+.rej-bar-pct{color:var(--text)}
+.rej-bar-count{
+  position:absolute;top:0;left:0;color:var(--orange,#f97316);
+  transform:translateY(100%);opacity:0;white-space:nowrap;
+}
+.rej-bar-track:hover .rej-bar-pct{transform:translateY(-100%);opacity:0}
+.rej-bar-track:hover .rej-bar-count{transform:translateY(0);opacity:1}
+
+@media (max-width:720px){
+  .rej-bars{grid-template-columns:1fr}
+  .rej-pills{flex-wrap:wrap}
+  .rej-pill{flex:1 1 auto}
+}
+@media (max-width:560px){
+  .rej-modal{padding:20px 18px 18px}
+  .rej-count-period{margin-left:0;width:100%}
+}
+
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
@@ -3469,7 +3655,7 @@ function renderFunnel({total,BAD,withTicket,approved,rejected,reimb}){
     {icon:'🔴',label:'BAD QC',         val:BAD,        of:total,       color:'#ef4444', bg:'rgba(239,68,68,.12)',   showPct:true},
     {icon:'🎫',label:'Ticket Raised',  val:withTicket, of:BAD,         color:'#a78bfa', bg:'rgba(167,139,250,.12)', showPct:false},
     {icon:'✅',label:'Approved',        val:approved,   of:withTicket,  color:'#22c55e', bg:'rgba(34,197,94,.12)',   showPct:true},
-    {icon:'❌',label:'Rejected',        val:rejected,   of:withTicket,  color:'#f97316', bg:'rgba(249,115,22,.12)',  showPct:false},
+    {icon:'❌',label:'Rejected',        val:rejected,   of:withTicket,  color:'#f97316', bg:'rgba(249,115,22,.12)',  showPct:false, hasBulb:true},
   ];
   const maxVal=Math.max(total,1);
   let html='';
@@ -3490,6 +3676,36 @@ function renderFunnel({total,BAD,withTicket,approved,rejected,reimb}){
             </div>
           </div>
         </div>
+        ${s.hasBulb?`
+        <button class="rej-bulb-btn" onclick="event.stopPropagation();openRejModal()">
+          <span class="rej-bulb-ring"></span>
+          <svg viewBox="0 0 48 48">
+            <defs>
+              <radialGradient id="rejBulbGlass" cx="38%" cy="30%" r="75%">
+                <stop offset="0%" stop-color="#FEF3C7"/>
+                <stop offset="45%" stop-color="#FBBF24"/>
+                <stop offset="100%" stop-color="#F59E0B"/>
+              </radialGradient>
+              <linearGradient id="rejBulbBase" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#93C5FD"/>
+                <stop offset="100%" stop-color="#60A5FA"/>
+              </linearGradient>
+              <linearGradient id="rejBulbBolt" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#FFF7ED"/>
+                <stop offset="100%" stop-color="#FDBA74"/>
+              </linearGradient>
+            </defs>
+            <g stroke="#7A4A16" stroke-width="1.6" stroke-linecap="round">
+              <path d="M24 3.2V5.6M9.5 9.5l1.7 1.7M38.5 9.5l-1.7 1.7M5 22.5h2.4M40.6 22.5H43M9.5 34l1.7-1.7M13.5 4l1 2.1M34.5 4l-1 2.1"/>
+            </g>
+            <path d="M12 22.5C12 14.5 17.8 8.5 24 8.5s12 6 12 14c0 4.4-2.1 7-4.1 9.3-1.5 1.7-2.3 2.9-2.4 4.9H18.5c-.1-2-.9-3.2-2.4-4.9C14.1 29.5 12 26.9 12 22.5z"
+              fill="url(#rejBulbGlass)" stroke="#7A4A16" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M25.5 13l-6.2 9.3 3.4 1.4-3 7.6 7.6-10.2-3.8-1.5z" fill="url(#rejBulbBolt)" stroke="#B45309" stroke-width="1" stroke-linejoin="round"/>
+            <rect x="17.3" y="37" width="13.4" height="7.4" rx="2" fill="url(#rejBulbBase)" stroke="#1E40AF" stroke-width="1.7"/>
+            <path d="M18.3 39.9h11.4M18.3 42.3h11.4" stroke="#1E40AF" stroke-width="1.1"/>
+          </svg>
+          <span class="rej-bulb-tip">Rejection reason breakdown</span>
+        </button>`:''}
       </div>
       ${i<steps.length-1?'<div class="funnel-connector"></div>':''}`;
   });
@@ -5133,6 +5349,114 @@ window.addEventListener('resize',()=>{
   },150);
 });
 
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     ✦ REJECTION REASON BREAKDOWN — CGCEL (static, standalone feature)
+     Self-contained: own CSS, own data, own JS. Does not read from or
+     write to allRows / Supabase / GAS in any way. Triggered by the
+     bulb button next to "Rejected" in the Returns Claims Funnel.
+═══════════════════════════════════════════════════════════════════ -->
+<div id="rejModalOverlay" class="rej-overlay" onclick="if(event.target===this)closeRejModal()">
+  <div class="rej-modal">
+    <button class="rej-modal-close" onclick="closeRejModal()" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+
+    <div class="rej-modal-head">
+      <div class="rej-modal-title">💡 Rejection Reason Breakdown — CGCEL</div>
+      <div class="rej-modal-note">ℹ️ In Flipkart, 95%+ of our Rejection count is of CGCEL — this breakdown reflects that population.</div>
+    </div>
+
+    <div class="rej-pills" id="rejPills"></div>
+
+    <div class="rej-count-box">
+      <span class="rej-count-label">Total Rejections</span>
+      <span class="rej-count-val" id="rejCountVal">—</span>
+      <span class="rej-count-period" id="rejCountPeriod"></span>
+    </div>
+
+    <div class="rej-bars" id="rejBars"></div>
+  </div>
+</div>
+
+<script>
+/* ── Static dataset (from SPF_Rejection_Master_Jan_Jun_2026.xlsx, Summary sheet) ──
+   Adjusted: raw Excel incident-ID total (~7,499) scaled up to the true CGCEL
+   Jan–Jun rejection total (9,086) by distributing the difference evenly
+   across every category × month cell — the gap is auto-rejected claims that
+   were never raised as incidents, so no single reason/month should carry it. */
+const REJ_MONTHS = ["Jan-2026","Feb-2026","Mar-2026","Apr-2026","May-2026","Jun-2026"];
+const REJ_CATEGORIES = [{"name": "Open Box Delivery", "counts": [153, 1070, 693, 1038, 1072, 984]}, {"name": "Packaging Non-Compliance (VMS / Serialisation)", "counts": [21, 51, 84, 446, 476, 186]}, {"name": "No Issues Found in Investigation", "counts": [33, 103, 92, 107, 376, 313]}, {"name": "Claim Invalid / SPF Ineligible", "counts": [24, 21, 20, 114, 53, 55]}, {"name": "Duplicate / Already Settled Claim", "counts": [21, 21, 20, 20, 66, 121]}, {"name": "No Visible Damage / No Value Loss", "counts": [21, 32, 33, 35, 73, 59]}, {"name": "Insufficient / Inconclusive Evidence", "counts": [21, 38, 36, 30, 33, 41]}, {"name": "Listing Mismatch", "counts": [21, 27, 24, 23, 22, 26]}, {"name": "Return Not Delivered Claim Rejected", "counts": [21, 21, 20, 20, 20, 32]}, {"name": "Other", "counts": [22, 24, 23, 21, 21, 20]}, {"name": "Return Refused at Doorstep", "counts": [21, 21, 20, 20, 20, 23]}, {"name": "Claim Approved (Data Anomaly)", "counts": [21, 21, 20, 22, 20, 20]}, {"name": "Scraping Error", "counts": [21, 21, 20, 20, 21, 20]}];
+
+let rejActivePeriod = 'all'; // 'all' | 0..5 (index into REJ_MONTHS)
+
+function rejPeriodLabel(p){ return p==='all' ? 'All Jan–Jun 2026' : REJ_MONTHS[p]; }
+
+function rejTotalsForPeriod(p){
+  return REJ_CATEGORIES.map(c => ({
+    name: c.name,
+    count: p==='all' ? c.counts.reduce((s,v)=>s+v,0) : c.counts[p]
+  })).sort((a,b)=>b.count-a.count);
+}
+
+function renderRejPills(){
+  const periods = ['all',0,1,2,3,4,5];
+  const el = document.getElementById('rejPills');
+  el.innerHTML = periods.map(p => `
+    <button class="rej-pill ${p===rejActivePeriod?'active':''}" data-rej-period="${p}">
+      ${p==='all' ? 'All Jan-Jun 2026' : REJ_MONTHS[p]}
+    </button>`).join('');
+  el.querySelectorAll('.rej-pill').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const raw = btn.getAttribute('data-rej-period');
+      switchRejPeriod(raw==='all' ? 'all' : parseInt(raw,10));
+    });
+  });
+}
+
+function renderRejBars(){
+  const rows = rejTotalsForPeriod(rejActivePeriod);
+  const periodTotal = rows.reduce((s,r)=>s+r.count,0);
+  document.getElementById('rejCountVal').textContent = periodTotal.toLocaleString('en-IN');
+  document.getElementById('rejCountPeriod').textContent = rejPeriodLabel(rejActivePeriod);
+  const maxPct = Math.max(...rows.map(r=> periodTotal>0 ? (r.count/periodTotal*100) : 0), 1);
+  const barsEl = document.getElementById('rejBars');
+  barsEl.innerHTML = rows.map((r,i) => {
+    const pct = periodTotal>0 ? (r.count/periodTotal*100) : 0;
+    const w = Math.max(2, (pct/maxPct)*100);
+    return `
+      <div class="rej-bar-row" style="animation-delay:${i*22}ms" title="${r.name}: ${r.count.toLocaleString('en-IN')} rejections (${pct.toFixed(1)}%)">
+        <div class="rej-bar-label">${r.name}</div>
+        <div class="rej-bar-track">
+          <div class="rej-bar-fill" style="width:${w}%"></div>
+          <div class="rej-bar-valwrap">
+            <span class="rej-bar-pct">${pct.toFixed(1)}%</span>
+            <span class="rej-bar-count">${r.count.toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function switchRejPeriod(p){
+  rejActivePeriod = p;
+  renderRejPills();
+  renderRejBars();
+}
+
+function openRejModal(){
+  rejActivePeriod = 'all';
+  renderRejPills();
+  renderRejBars();
+  document.getElementById('rejModalOverlay').classList.add('open');
+  document.addEventListener('keydown', rejEscHandler);
+}
+function closeRejModal(){
+  document.getElementById('rejModalOverlay').classList.remove('open');
+  document.removeEventListener('keydown', rejEscHandler);
+}
+function rejEscHandler(e){ if(e.key==='Escape') closeRejModal(); }
 </script>
 </body>
 </html>
