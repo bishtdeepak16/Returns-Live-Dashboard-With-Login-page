@@ -1943,6 +1943,9 @@ body,header,.global-slicer,.chart-card,.panel.active,.tabs,
     </div>
     <div id="loaderPct" style="font-family:'DM Mono',monospace;font-size:.78rem;font-weight:500;color:#fbbf24;margin-bottom:7px;text-shadow:0 0 14px rgba(245,158,11,.6);">0%</div>
     <div id="loaderMsg" style="font-family:'DM Mono',monospace;font-size:.7rem;color:#8a7c62;letter-spacing:.06em;min-height:1.2em;">Connecting to data source…</div>
+    <div style="margin-top:20px;padding:7px 18px;border:1px solid rgba(245,158,11,.3);border-radius:99px;background:rgba(245,158,11,.07);font-family:'Outfit',system-ui,sans-serif;font-size:.67rem;font-weight:600;color:#F59E0B;letter-spacing:.05em;">
+      ⚡ Do not leave the tab
+    </div>
   </div>
 </div>
 <style>
@@ -2898,7 +2901,7 @@ async function apiGet(path, hdrs={}){
   return fetch(`${URL_BASE}${path}`,{headers:{apikey:API_KEY,Authorization:`Bearer ${API_KEY}`,...hdrs}});
 }
 async function fetchPaged(filter, cols){
-  let rows=[], from=0, ps=2000; // 2k page size = fewer round trips
+  let rows=[], from=0, ps=1000;
   // IMPORTANT: order= is required for stable PostgREST pagination.
   // Without it, rows between pages are non-deterministic and records get silently dropped.
   const orderParam = 'order=shipment_report_date.asc.nullslast,tracking_id.asc';
@@ -2973,90 +2976,111 @@ async function loadData(){
   setLoading('tatTable','Loading TAT…');
   updateRefreshInfoBox('loading');
   setProgress(5);
-  /* Cycling messages — independent of progress bar */
   const _lmsgs=['Connecting to data source…','Fetching returns data…','Processing records…','Building dashboard…'];
   let _lmi=0;
-  const _lmInt=setInterval(()=>{
-    _lmi=(_lmi+1)%_lmsgs.length;
-    const el=document.getElementById('loaderMsg');
-    if(el) el.textContent=_lmsgs[_lmi];
-  },2200);
+  const _lmInt=setInterval(()=>{_lmi=(_lmi+1)%_lmsgs.length;const el=document.getElementById('loaderMsg');if(el)el.textContent=_lmsgs[_lmi];},2200);
 
-  try {
-    let coldRows = [], hotRows = [];
+  /* ── Web Worker: runs in separate thread, NOT throttled when tab is hidden ── */
+  function makeWorker(gu,su,sk,tb,co){
+    var ln=[
+      'const GU='+JSON.stringify(gu)+';',
+      'const SU='+JSON.stringify(su)+';',
+      'const SK='+JSON.stringify(sk)+';',
+      'const TB='+JSON.stringify(tb)+';',
+      'const CO='+JSON.stringify(co)+';',
+      'const PS=1000,PA=8;',
+      'async function gas(){',
+      '  self.postMessage({t:"p",v:15});',
+      '  var rs=await Promise.all([fetch(GU+"?type=cold"),fetch(GU+"?type=hot")]);',
+      '  self.postMessage({t:"p",v:60});',
+      '  var cold=rs[0].ok?await rs[0].json():[];',
+      '  self.postMessage({t:"p",v:75});',
+      '  var hot=rs[1].ok?await rs[1].json():[];',
+      '  self.postMessage({t:"p",v:88});',
+      '  self.postMessage({t:"g",c:cold,h:hot});',
+      '}',
+      'async function sb(){',
+      '  var url=SU+"/rest/v1/"+TB+"?order=shipment_report_date.asc.nullslast,tracking_id.asc&select="+CO;',
+      '  var hd={apikey:SK,Authorization:"Bearer "+SK};',
+      '  var r0=await fetch(url,{headers:Object.assign({},hd,{Range:"0-"+(PS-1),Prefer:"count=exact"})});',
+      '  var b0=await r0.json();',
+      '  var cr=r0.headers.get("content-range")||"";',
+      '  var tot=cr.includes("/")?parseInt(cr.split("/")[1]):b0.length;',
+      '  self.postMessage({t:"b",rows:b0,ld:b0.length,tot:tot});',
+      '  self.postMessage({t:"p",v:20});',
+      '  if(tot<=PS||b0.length<PS){self.postMessage({t:"d"});return;}',
+      '  var pg=Math.ceil(tot/PS),ld=b0.length;',
+      '  var rem=Array.from({length:pg-1},function(_,i){return i+1;});',
+      '  for(var i=0;i<rem.length;i+=PA){',
+      '    var bch=rem.slice(i,i+PA);',
+      '    var res=await Promise.all(bch.map(function(p){',
+      '      return fetch(url,{headers:Object.assign({},hd,{Range:(p*PS)+"-"+(p*PS+PS-1)})}).then(function(r){return r.json();});',
+      '    }));',
+      '    var br=[].concat.apply([],res);ld+=br.length;',
+      '    self.postMessage({t:"b",rows:br,ld:ld,tot:tot});',
+      '    self.postMessage({t:"p",v:20+Math.round(((i+bch.length)/rem.length)*72)});',
+      '  }',
+      '  self.postMessage({t:"d"});',
+      '}',
+      'self.onmessage=function(e){if(e.data.t==="sg")gas();if(e.data.t==="ss")sb();};'
+    ];
+    return new Worker(URL.createObjectURL(new Blob([ln.join("\n")],{type:"application/javascript"})));
+  }
 
-    if (GAS_URL && GAS_URL !== 'YOUR_GAS_WEB_APP_URL_HERE') {
-      /* ── Fetch from GAS Web App (reads Google Sheet — 0 Supabase egress) ── */
-      setProgress(15);
-      const [coldRes, hotRes] = await Promise.all([
-        fetch(`${GAS_URL}?type=cold`),
-        fetch(`${GAS_URL}?type=hot`)
-      ]);
-      setProgress(60);
-      if (coldRes.ok) coldRows = await coldRes.json();
-      setProgress(75);
-      if (hotRes.ok)  hotRows  = await hotRes.json();
-      setProgress(88);
-      await buildQcReadySet();
+  const worker = makeWorker(GAS_URL, URL_BASE, API_KEY, TABLE, 'tracking_id,fc_code,fc_name,client_name,marketplace_name,shipment_report_date,shipment_received_date,qc_status,qc_completed_at,ticket_id,claim_status,reimbursement_amount,return_type,logistics_partner,order_id,damage_summary');
 
-      /* Deduplicate — hot overwrites cold if same tracking_id */
-      const mergeMap = new Map();
-      coldRows.forEach(r => mergeMap.set(String(r.tracking_id || Math.random()), r));
-      hotRows.forEach(r  => mergeMap.set(String(r.tracking_id || Math.random()), r));
-      allRows = [...mergeMap.values()];
-
-    } else {
-      /* ── Direct Supabase fallback (GAS not configured) ── */
-      setProgress(15);
-      const [rows] = await Promise.all([
-        fetchPaged('',
-          'tracking_id,fc_code,fc_name,client_name,marketplace_name,shipment_report_date,shipment_received_date,qc_status,qc_completed_at,ticket_id,claim_status,reimbursement_amount,return_type,logistics_partner,order_id,damage_summary'
-        ),
-        buildQcReadySet()
-      ]);
-      setProgress(82);
-      allRows = rows;
-    }
-
-    setProgress(92);
-    applyAuthFilter();
-    populateFilters();
-    refreshAll();
-    setProgress(100);
-
-    /* Update info box */
-    updateRefreshInfoBox('done');
-
-    /* Render macro if page is visible */
-    if(document.getElementById('page-macro')?.style.display !== 'none') {
-      setTimeout(renderMacro, 80);
-    }
-
-    /* Hide loading overlay — wait for bar to reach 100% first */
-    clearInterval(_lmInt);
-    finishProgress(()=>{
-      const ldr = document.getElementById('bounceLoader');
-      if(ldr){
-        ldr.style.opacity='0';
-        setTimeout(()=>{ ldr.style.display='none'; showOnboardingHints(); }, 650);
-      }
-    });
-    const el_tsBadge = document.getElementById('tsBadge');
-    if(el_tsBadge) el_tsBadge.textContent = new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});
-    document.getElementById('footerTs').textContent =
-      `Data as of: ${new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})} · ` +
-      `${allRows.length.toLocaleString('en-IN')} total rows`;
-
-  } catch(e){
-    clearInterval(_lmInt);
-    clearInterval(_prgTick);
-    const ldr2=document.getElementById('bounceLoader');
-    if(ldr2){ldr2.style.opacity='0';setTimeout(()=>ldr2.style.display='none',650);}
-    setError('pendingTable',e.message);
-    setError('badTable',e.message);
-    document.getElementById('funnelContainer').innerHTML=
-      `<div class="state-msg"><span style="font-size:1.5rem">⚠️</span><span style="color:var(--red)">${e.message}</span></div>`;
+  const _done=async(rows)=>{
+    try{
+      allRows=rows; setProgress(92);
+      applyAuthFilter(); populateFilters(); refreshAll(); setProgress(100);
+      updateRefreshInfoBox('done');
+      if(document.getElementById('page-macro')?.style.display!=='none') setTimeout(renderMacro,80);
+      clearInterval(_lmInt);
+      finishProgress(()=>{
+        const ldr=document.getElementById('bounceLoader');
+        if(ldr){ldr.style.opacity='0';setTimeout(()=>{ldr.style.display='none';showOnboardingHints();},650);}
+      });
+      const ts=new Date().toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});
+      const el_ts=document.getElementById('tsBadge');if(el_ts)el_ts.textContent=ts;
+      document.getElementById('footerTs').textContent='Data as of: '+ts+' · '+allRows.length.toLocaleString('en-IN')+' total rows';
+    }catch(err){_err(err);}
+  };
+  const _err=(e)=>{
+    worker.terminate(); clearInterval(_lmInt); clearInterval(_prgTick);
+    const l2=document.getElementById('bounceLoader');
+    if(l2){l2.style.opacity='0';setTimeout(()=>l2.style.display='none',650);}
+    setError('pendingTable',e.message||'Error');
+    setError('badTable',e.message||'Error');
+    document.getElementById('funnelContainer').innerHTML='<div class="state-msg"><span style="font-size:1.5rem">⚠️</span><span style="color:var(--red)">'+(e.message||'Error')+'</span></div>';
     updateRefreshInfoBox('error');
+  };
+
+  if(GAS_URL&&GAS_URL!=='YOUR_GAS_WEB_APP_URL_HERE'){
+    worker.onmessage=async(e)=>{
+      const d=e.data;
+      if(d.t==='p') setProgress(d.v);
+      if(d.t==='g'){
+        worker.terminate();
+        const mm=new Map();
+        d.c.forEach(r=>mm.set(String(r.tracking_id||Math.random()),r));
+        d.h.forEach(r=>mm.set(String(r.tracking_id||Math.random()),r));
+        await buildQcReadySet();
+        await _done([...mm.values()]);
+      }
+    };
+    worker.onerror=(e)=>_err(new Error(e.message||'Worker error'));
+    worker.postMessage({t:'sg'});
+  }else{
+    let _acc=[];
+    buildQcReadySet();
+    worker.onmessage=async(e)=>{
+      const d=e.data;
+      if(d.t==='p') setProgress(d.v);
+      if(d.t==='b') _acc=_acc.concat(d.rows);
+      if(d.t==='d'){worker.terminate();await _done(_acc);}
+    };
+    worker.onerror=(e)=>_err(new Error(e.message||'Worker error'));
+    worker.postMessage({t:'ss'});
   }
 }
 
